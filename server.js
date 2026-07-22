@@ -1,38 +1,36 @@
 const WebSocket = require('ws');
 
-const PORT = process.env.PORT || 8080; // Usa el puerto de hosting o el 8080 por defecto
+// Render asigna el puerto en process.env.PORT
+const PORT = process.env.PORT || 8080;
 
-// Creamos el servidor indicando host '0.0.0.0' para que acepte conexiones externas en Render
-const wss = new WebSocket.Server({
+const wss = new WebSocket.Server({ 
     port: PORT,
     host: '0.0.0.0'
 });
 
+// Guardamos directamente la referencia del WebSocket de cada jugador
 let estadoJuego = {
-    mario: null, // Guardará la referencia al WebSocket de Mario
-    luigi: null // Guardará la referencia al WebSocket de Luigi
+    mario: null,
+    luigi: null
 };
 
 console.log(`Servidor multijugador iniciado en el puerto ${PORT}`);
 
-// Guardar todos los clientes conectados
-let clientes = [];
-
 wss.on('connection', (ws) => {
-    // 1. ASIGNACIÓN INTELIGENTE DE ROLES
-    let rolAsignado = "";
+    let rolAsignado = null;
 
+    // Asignación segura de roles
     if (!estadoJuego.mario) {
         rolAsignado = "mario";
-        estadoJuego.mario.ws;
+        estadoJuego.mario = ws;
     } else if (!estadoJuego.luigi) {
         rolAsignado = "luigi";
-        estadoJuego.luigi.ws;
+        estadoJuego.luigi = ws;
     } else {
-        rolAsignado = "espectador"
+        rolAsignado = "espectador";
     }
 
-    // Le informamos al jugador cuál es su rol
+    // Le informamos al cliente qué rol le tocó
     ws.send(JSON.stringify({
         tipo: "asignar_rol",
         rol: rolAsignado
@@ -40,29 +38,31 @@ wss.on('connection', (ws) => {
 
     console.log(`Cliente conectado como: ${rolAsignado}`);
 
-    // 2. RECEPCIÓN Y MANEJO DE MENSAJES
+    // Escuchar mensajes entrantes
     ws.on('message', (message) => {
         try {
-            // Retransmitir ÚNICAMENTE a los otros jugadores conectados (no al que envió)
+            // Retransmitir a TODOS los clientes excepto al que lo envió
             wss.clients.forEach((client) => {
                 if (client !== ws && client.readyState === WebSocket.OPEN) {
                     client.send(message.toString());
                 }
             });
         } catch (error) {
-            console.error("Error al procesar mensaje:", error);
+            console.error("Error procesando mensaje:", error);
         }
     });
 
-    // 3. LIMPIEZA AL DESCONECTARSE (Crucial)
+    // Limpieza cuando un jugador cierra la ventana o se desconecta
     ws.on('close', () => {
-        console.log(`Cliente ${rolAsignado} se ha desconectado.`);
+        console.log(`Cliente (${rolAsignado}) desconectado`);
 
-        // Liberar el rol para que otra persona pueda entrar y usar a ese personaje
-        if (rolAsignado === "mario") estadoJuego.mario = null;
-        if (rolAsignado === "luigi") estadoJuego.luigi = null;
+        if (rolAsignado === "mario") {
+            estadoJuego.mario = null;
+        } else if (rolAsignado === "luigi") {
+            estadoJuego.luigi = null;
+        }
 
-        // Opcional: Avisar al cliente restante que el otro se fue
+        // Avisar a los clientes restantes
         wss.clients.forEach((client) => {
             if (client.readyState === WebSocket.OPEN) {
                 client.send(JSON.stringify({
@@ -73,5 +73,7 @@ wss.on('connection', (ws) => {
         });
     });
 
-    ws.on('error', (err) => console.error(`Error en cliente ${rolAsignado}:`, err));
+    ws.on('error', (err) => {
+        console.error(`Error en socket (${rolAsignado}):`, err);
+    });
 });
