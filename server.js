@@ -1,6 +1,6 @@
 const WebSocket = require('ws');
 const PORT = process.env.PORT || 8080; // Usa el puerto de hosting o el 8080 por defecto
-const wss = new WebSocketServer({ port: PORT });
+const wss = new WebSocket.Server({ port: PORT });
 
 let estadoJuego = {
     mario: null, // Guardará la referencia al WebSocket de Mario
